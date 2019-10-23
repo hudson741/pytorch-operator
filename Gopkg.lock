@@ -226,33 +226,6 @@
   version = "v1.0.2"
 
 [[projects]]
-  branch = "master"
-  digest = "1:b05334b4054969008b6b4771f5bb2dbc3c878a17ca264323a1b05a2dffa6ace2"
-  name = "github.com/kubeflow/pytorch-operator"
-  packages = [
-    "cmd/pytorch-operator.v1/app",
-    "cmd/pytorch-operator.v1/app/options",
-    "pkg/apis/pytorch/v1",
-    "pkg/apis/pytorch/validation",
-    "pkg/client/clientset/versioned",
-    "pkg/client/clientset/versioned/scheme",
-    "pkg/client/clientset/versioned/typed/pytorch/v1",
-    "pkg/client/clientset/versioned/typed/pytorch/v1/fake",
-    "pkg/client/informers/externalversions",
-    "pkg/client/informers/externalversions/internalinterfaces",
-    "pkg/client/informers/externalversions/pytorch",
-    "pkg/client/informers/externalversions/pytorch/v1",
-    "pkg/client/listers/pytorch/v1",
-    "pkg/common/config",
-    "pkg/common/util/v1/testutil",
-    "pkg/common/util/v1/unstructured",
-    "pkg/controller.v1/pytorch",
-    "pkg/util",
-  ]
-  pruneopts = "NUT"
-  revision = "b32d658d5c63b1ec2d115fc5a4734149f43108da"
-
-[[projects]]
   branch = "v0.7-branch"
   digest = "1:32a13ce258d01530263fb9fca967f27c67178da7fad89e57a060031135522e60"
   name = "github.com/kubeflow/tf-operator"
@@ -966,24 +939,6 @@
   input-imports = [
     "github.com/gogo/protobuf/proto",
     "github.com/golang/protobuf/proto",
-    "github.com/kubeflow/pytorch-operator/cmd/pytorch-operator.v1/app",
-    "github.com/kubeflow/pytorch-operator/cmd/pytorch-operator.v1/app/options",
-    "github.com/kubeflow/pytorch-operator/pkg/apis/pytorch/v1",
-    "github.com/kubeflow/pytorch-operator/pkg/apis/pytorch/validation",
-    "github.com/kubeflow/pytorch-operator/pkg/client/clientset/versioned",
-    "github.com/kubeflow/pytorch-operator/pkg/client/clientset/versioned/scheme",
-    "github.com/kubeflow/pytorch-operator/pkg/client/clientset/versioned/typed/pytorch/v1",
-    "github.com/kubeflow/pytorch-operator/pkg/client/clientset/versioned/typed/pytorch/v1/fake",
-    "github.com/kubeflow/pytorch-operator/pkg/client/informers/externalversions",
-    "github.com/kubeflow/pytorch-operator/pkg/client/informers/externalversions/internalinterfaces",
-    "github.com/kubeflow/pytorch-operator/pkg/client/informers/externalversions/pytorch",
-    "github.com/kubeflow/pytorch-operator/pkg/client/informers/externalversions/pytorch/v1",
-    "github.com/kubeflow/pytorch-operator/pkg/client/listers/pytorch/v1",
-    "github.com/kubeflow/pytorch-operator/pkg/common/config",
-    "github.com/kubeflow/pytorch-operator/pkg/common/util/v1/testutil",
-    "github.com/kubeflow/pytorch-operator/pkg/common/util/v1/unstructured",
-    "github.com/kubeflow/pytorch-operator/pkg/controller.v1/pytorch",
-    "github.com/kubeflow/pytorch-operator/pkg/util",
     "github.com/kubeflow/tf-operator/pkg/apis/common/v1",
     "github.com/kubeflow/tf-operator/pkg/common/jobcontroller",
     "github.com/kubeflow/tf-operator/pkg/control",

@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
@@ -44,12 +44,15 @@ const (
 	podTemplateSchedulerNameReason = "SettedPodTemplateSchedulerName"
 )
 
+// reconcilePods checks and updates pods for each given PyTorchReplicaSpec.
+// It will requeue the job in case of an error while creating/deleting pods.
+
 //置换tfjob内的volums,为后期读取minio进行分区
-func setPodVMSpec(podTemplateSpec *v1.PodTemplateSpec, pcjob *pyv1.PyTorchJob, rt, index string) {
-	logger := pylogger.LoggerForReplica(pcjob, rt)
-	defer func() {
-		if err := recover(); err != nil {
-			logger.Error("setPodVMSpec has error with ", err)
+func setPodVMSpec(podTemplateSpec *v1.PodTemplateSpec, pyJob *pyv1.PyTorchJob, rt, index string) {
+	logger := pylogger.LoggerForReplica(pyJob, rt)
+	defer func(){
+		if err :=recover(); err!=nil{
+			logger.Error("setPodVMSpec has error with ",err)
 		}
 	}()
 	isReplaceVMSpec := false
@@ -64,11 +67,11 @@ func setPodVMSpec(podTemplateSpec *v1.PodTemplateSpec, pcjob *pyv1.PyTorchJob, r
 				}
 			}
 			logger.Info("setPodVMSpec  with isReplaceVMSpec ", isReplaceVMSpec)
-			if !isReplaceVMSpec {
+			if !isReplaceVMSpec{
 				return
 			}
 
-			if container.VolumeMounts == nil {
+			if container.VolumeMounts == nil{
 				break
 			}
 
@@ -81,17 +84,15 @@ func setPodVMSpec(podTemplateSpec *v1.PodTemplateSpec, pcjob *pyv1.PyTorchJob, r
 
 }
 
-// reconcilePods checks and updates pods for each given PyTorchReplicaSpec.
-// It will requeue the job in case of an error while creating/deleting pods.
 func (pc *PyTorchController) reconcilePods(
-	pcjob *pyv1.PyTorchJob,
+	job *pyv1.PyTorchJob,
 	pods []*v1.Pod,
 	rtype pyv1.PyTorchReplicaType,
 	spec *common.ReplicaSpec, rstatus map[string]v1.PodPhase) error {
 
 	// Convert PyTorchReplicaType to lower string.
 	rt := strings.ToLower(string(rtype))
-	logger := pylogger.LoggerForReplica(pcjob, rt)
+	logger := pylogger.LoggerForReplica(job, rt)
 
 	// Get all pods for the type rt.
 	pods, err := pc.FilterPodsForReplicaType(pods, rt)
@@ -102,7 +103,7 @@ func (pc *PyTorchController) reconcilePods(
 	restart := false
 	masterRole := false
 
-	initializePyTorchReplicaStatuses(pcjob, rtype)
+	initializePyTorchReplicaStatuses(job, rtype)
 
 	podSlices := getPodSlices(pods, replicas, logger)
 	for index, podSlice := range podSlices {
@@ -113,11 +114,11 @@ func (pc *PyTorchController) reconcilePods(
 		} else if len(podSlice) == 0 {
 			logger.Infof("Need to create new pod: %s-%d", rt, index)
 
-			//Pytorch pcjob will have exactly one Master pod available
+			//Pytorch Job will have exactly one Master pod available
 			if rtype == pyv1.PyTorchReplicaTypeMaster {
 				masterRole = true
 			}
-			err = pc.createNewPod(pcjob, rtype, strconv.Itoa(index), spec, masterRole)
+			err = pc.createNewPod(job, rtype, strconv.Itoa(index), spec, masterRole)
 			if err != nil {
 				return err
 			}
@@ -133,22 +134,22 @@ func (pc *PyTorchController) reconcilePods(
 					if status.Name == pyv1.DefaultContainerName && state.Terminated != nil {
 						exitCode = state.Terminated.ExitCode
 						logger.Infof("Pod: %v.%v exited with code %v", pod.Namespace, pod.Name, exitCode)
-						pc.Recorder.Eventf(pcjob, v1.EventTypeNormal, exitedWithCodeReason, "Pod: %v.%v exited with code %v", pod.Namespace, pod.Name, exitCode)
+						pc.Recorder.Eventf(job, v1.EventTypeNormal, exitedWithCodeReason, "Pod: %v.%v exited with code %v", pod.Namespace, pod.Name, exitCode)
 					}
 				}
 				if pod.Status.Phase == v1.PodFailed && train_util.IsRetryableExitCode(exitCode) {
 					logger.Infof("Need to restart the pod: %v.%v", pod.Namespace, pod.Name)
-					if err := pc.PodControl.DeletePod(pod.Namespace, pod.Name, pcjob); err != nil {
+					if err := pc.PodControl.DeletePod(pod.Namespace, pod.Name, job); err != nil {
 						return err
 					}
 					restart = true
 				}
 			}
-			updatePyTorchJobReplicaStatuses(pcjob, rtype, pod)
+			updatePyTorchJobReplicaStatuses(job, rtype, pod)
 		}
 	}
 
-	return pc.updateStatusSingle(pcjob, rtype, replicas, restart)
+	return pc.updateStatusSingle(job, rtype, replicas, restart)
 }
 
 // getPodSlices returns a slice, which element is the slice of pod.
@@ -174,24 +175,24 @@ func getPodSlices(pods []*v1.Pod, replicas int, logger *log.Entry) [][]*v1.Pod {
 }
 
 // createNewPod creates a new pod for the given index and type.
-func (pc *PyTorchController) createNewPod(pcjob *pyv1.PyTorchJob, rtype pyv1.PyTorchReplicaType, index string, spec *common.ReplicaSpec, masterRole bool) error {
+func (pc *PyTorchController) createNewPod(job *pyv1.PyTorchJob, rtype pyv1.PyTorchReplicaType, index string, spec *common.ReplicaSpec, masterRole bool) error {
 	rt := strings.ToLower(string(rtype))
-	pcjobKey, err := KeyFunc(pcjob)
+	jobKey, err := KeyFunc(job)
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("couldn't get key for pcjob object %#v: %v", pcjob, err))
+		utilruntime.HandleError(fmt.Errorf("couldn't get key for job object %#v: %v", job, err))
 		return err
 	}
-	expectationPodsKey := jobcontroller.GenExpectationPodsKey(pcjobKey, rt)
+	expectationPodsKey := jobcontroller.GenExpectationPodsKey(jobKey, rt)
 	err = pc.Expectations.ExpectCreations(expectationPodsKey, 1)
 	if err != nil {
 		return err
 	}
-	logger := pylogger.LoggerForReplica(pcjob, rt)
+	logger := pylogger.LoggerForReplica(job, rt)
 	// Create OwnerReference.
-	controllerRef := pc.GenOwnerReference(pcjob)
+	controllerRef := pc.GenOwnerReference(job)
 
 	// Set type and index for the worker.
-	labels := pc.GenLabels(pcjob.Name)
+	labels := pc.GenLabels(job.Name)
 	labels[replicaTypeLabel] = rt
 	labels[replicaIndexLabel] = index
 
@@ -199,9 +200,9 @@ func (pc *PyTorchController) createNewPod(pcjob *pyv1.PyTorchJob, rtype pyv1.PyT
 		labels[jobcontroller.JobRoleLabel] = "master"
 	}
 	podTemplate := spec.Template.DeepCopy()
-	totalReplicas := getTotalReplicas(pcjob)
+	totalReplicas := getTotalReplicas(job)
 	// Set name for the template.
-	podTemplate.Name = jobcontroller.GenGeneralName(pcjob.Name, rt, index)
+	podTemplate.Name = jobcontroller.GenGeneralName(job.Name, rt, index)
 
 	if podTemplate.Labels == nil {
 		podTemplate.Labels = make(map[string]string)
@@ -211,7 +212,7 @@ func (pc *PyTorchController) createNewPod(pcjob *pyv1.PyTorchJob, rtype pyv1.PyT
 		podTemplate.Labels[key] = value
 	}
 
-	if err := setClusterSpec(podTemplate, pcjob, totalReplicas, index, rtype); err != nil {
+	if err := setClusterSpec(podTemplate, job, totalReplicas, index, rtype); err != nil {
 		return err
 	}
 
@@ -220,12 +221,11 @@ func (pc *PyTorchController) createNewPod(pcjob *pyv1.PyTorchJob, rtype pyv1.PyT
 	if podTemplate.Spec.RestartPolicy != v1.RestartPolicy("") {
 		errMsg := "Restart policy in pod template will be overwritten by restart policy in replica spec"
 		logger.Warning(errMsg)
-		pc.Recorder.Event(pcjob, v1.EventTypeWarning, podTemplateRestartPolicyReason, errMsg)
+		pc.Recorder.Event(job, v1.EventTypeWarning, podTemplateRestartPolicyReason, errMsg)
 	}
 	setRestartPolicy(podTemplate, spec)
-
 	if !masterRole {
-		masterAddr := jobcontroller.GenGeneralName(pcjob.Name, strings.ToLower(string(pyv1.PyTorchReplicaTypeMaster)), strconv.Itoa(0))
+		masterAddr := jobcontroller.GenGeneralName(job.Name, strings.ToLower(string(pyv1.PyTorchReplicaTypeMaster)), strconv.Itoa(0))
 		err := AddInitContainerForWorkerPod(podTemplate, InitContainerParam{masterAddr})
 		if err != nil {
 			return err
@@ -236,10 +236,10 @@ func (pc *PyTorchController) createNewPod(pcjob *pyv1.PyTorchJob, rtype pyv1.PyT
 	// 1. if user has specified other scheduler, we report a warning without overriding any fields.
 	// 2. if no SchedulerName is set for pods, then we set the SchedulerName to "kube-batch".
 	if pc.Config.EnableGangScheduling {
-		if pc.isNonGangSchedulerSet(pcjob) {
+		if pc.isNonGangSchedulerSet(job) {
 			errMsg := "Another scheduler is specified when gang-scheduling is enabled and it will not be overwritten"
 			logger.Warning(errMsg)
-			pc.Recorder.Event(pcjob, v1.EventTypeWarning, podTemplateSchedulerNameReason, errMsg)
+			pc.Recorder.Event(job, v1.EventTypeWarning, podTemplateSchedulerNameReason, errMsg)
 		} else {
 			podTemplate.Spec.SchedulerName = pc.Config.GangSchedulerName
 		}
@@ -250,9 +250,10 @@ func (pc *PyTorchController) createNewPod(pcjob *pyv1.PyTorchJob, rtype pyv1.PyT
 		podTemplate.Annotations[gangSchedulingPodGroupAnnotation] = jobcontroller.GenPodGroupName(job.Name)
 	}
 
-	setPodVMSpec(podTemplate, pcjob, rt, index)
+	//外加设置pod内subpath替换
+	setPodVMSpec(podTemplate,job , rt, index)
 
-	err = pc.PodControl.CreatePodsWithControllerRef(pcjob.Namespace, podTemplate, pcjob, controllerRef)
+	err = pc.PodControl.CreatePodsWithControllerRef(job.Namespace, podTemplate, job, controllerRef)
 	if err != nil && k8serrors.IsTimeout(err) {
 		// Pod is created but its initialization has timed out.
 		// If the initialization is successful eventually, the
