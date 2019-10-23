@@ -176,10 +176,7 @@ func (pc *PyTorchController) cleanupPyTorchJob(job *pyv1.PyTorchJob) error {
 	ttl := job.Spec.TTLSecondsAfterFinished
 	if ttl == nil {
 		// do nothing if the cleanup delay is not set
-		// return nil
-		//此处修改，如果没设置ttl时间，赋予60s
-		var ttlSecondsAfterFinished int32 = 600
-		ttl = &ttlSecondsAfterFinished
+		return nil
 	}
 	duration := time.Second * time.Duration(*ttl)
 	if currentTime.After(job.Status.CompletionTime.Add(duration)) {
